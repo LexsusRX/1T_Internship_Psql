@@ -12,7 +12,7 @@ x-airflow-common:
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-pandas selenium dateparser psycopg2-binary SQLAlchemy beautifulsoup4 }
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-pandas selenium dateparser psycopg2-binary SQLAlchemy beautifulsoup4 tqdm fake-useragent webdriver-manager}
 
   volumes:
     - ./airflow/cfg/airflow.cfg:/opt/airflow/airflow.cfg

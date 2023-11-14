@@ -5,6 +5,7 @@
   "base_yand": "https://yandex.ru/jobs/vacancies/",
   "base_vk": "https://team.vk.company/vacancy/",
   "base_tin": "https://www.tinkoff.ru/career/it/",
+  "base_careerist": "https://careerist.ru/",
   "csv_file_path": "./raw_data/",
   "psql_raw_path": "/docker-entrypoint-initdb.d/raw_data/",
   "professions": [
