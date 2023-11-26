@@ -22,7 +22,7 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.hooks.base_hook import BaseHook
 from airflow.models import Variable
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium import webdriver
@@ -34,8 +34,6 @@ import os
 #далее импорт из скрипта и минус то что уже есть
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from bs4 import BeautifulSoup
 import requests
 from fake_useragent import UserAgent
@@ -43,7 +41,6 @@ import lxml
 from tqdm import tqdm
 import warnings
 warnings.filterwarnings("ignore")
-from datetime import date
 
 # Connections settings
 # Загружаем данные подключений из JSON файла
@@ -75,15 +72,15 @@ if not Variable.get("shares_variable", default_var=None):
 
 dag_variables = Variable.get("shares_variable", deserialize_json=True)
 
-url_sber = dag_variables.get('base_sber')
-url_yand = dag_variables.get('base_yand')
-url_vk = dag_variables.get('base_vk')
-url_tin = dag_variables.get('base_tin')
-url_careerist = dag_variables.get('base_careerist')
+url_careerist = "https://careerist.ru/"
 
 raw_tables = ['raw_vk', 'raw_sber', 'raw_tinkoff', 'raw_yandex', 'del_vacancy_core', 'raw_careerist']
 
-options = ChromeOptions()
+#options = ChromeOptions()
+#options = webdriver.ChromeOptions()
+#options.add_argument("--headless")
+#options.add_argument('--no-sandbox')
+#options.add_argument('--disable-dev-shm-usage')
 
 profs = dag_variables.get('professions')
 
@@ -163,225 +160,213 @@ class DatabaseManager:
 
 
 
-class BaseJobParser:
-    def __init__(self, url, profs, log, conn):
-        self.browser = webdriver.Remote(command_executor='http://selenium-router:4444/wd/hub', options=options)
-        self.url = url
-        self.browser.get(self.url)
-        self.browser.maximize_window()
-        self.browser.delete_all_cookies()
-        time.sleep(2)
-        self.profs = profs
-        self.log = log
-        self.conn = conn
+#class BaseJobParser:
+#    def __init__(self, url_careerist, profs, log, conn):
+#        self.browser = webdriver.Remote(command_executor='http://selenium-router:4444/wd/hub', options=options)
+#        self.url_careerist = url_careerist
+#        self.browser.get(self.url_careerist)
+#        self.browser.maximize_window()
+#        self.browser.delete_all_cookies()
+#        time.sleep(2)
+#        self.profs = profs
+#        self.log = log
+#        self.conn = conn
+#
+#    def scroll_down_page(self, page_height=0):
+#        """
+#        Метод прокрутки страницы
+#        """
+#        self.browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#        time.sleep(2)
+#        new_page_height = self.browser.execute_script('return document.body.scrollHeight')
+#        if new_page_height > page_height:
+#            self.scroll_down_page(new_page_height)
+#
+#    def stop(self):
+#        """
+#        Метод для выхода из Selenium Webdriver
+#        """
+#        self.browser.quit()
+#
+#    def find_vacancies(self):
+#        """
+#        Метод для парсинга вакансий, должен быть переопределен в наследниках
+#        """
+#        raise NotImplementedError("Вы должны определить метод find_vacancies")
+#
+#    def save_df(self):
+#        """
+#        Метод для сохранения данных из pandas DataFrame
+#        """
+#        raise NotImplementedError("Вы должны определить метод save_df")
 
-    def scroll_down_page(self, page_height=0):
-        """
-        Метод прокрутки страницы
-        """
-        self.browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        new_page_height = self.browser.execute_script('return document.body.scrollHeight')
-        if new_page_height > page_height:
-            self.scroll_down_page(new_page_height)
 
-    def stop(self):
-        """
-        Метод для выхода из Selenium Webdriver
-        """
-        self.browser.quit()
-
-    def find_vacancies(self):
-        """
-        Метод для парсинга вакансий, должен быть переопределен в наследниках
-        """
-        raise NotImplementedError("Вы должны определить метод find_vacancies")
-
-    def save_df(self):
-        """
-        Метод для сохранения данных из pandas DataFrame
-        """
-        raise NotImplementedError("Вы должны определить метод save_df")
-
-
-class careeristJobParser(BaseJobParser):
+class careeristJobParser:
     """
-    Парсер вакансий с сайта VK, наследованный от BaseJobParser
+    Парсер вакансий с сайта careerist, наследованный от BaseJobParser
     """
+    df = pd.DataFrame({
 
-
+    'vacancy_name': [],
+    'company': [],
+    'salary_from': [],
+    'towns': [],
+    'date': [],
+    'url_careerist': [],
+    'description': [],
+    'current_date': pd.to_datetime(date.today())
+    })
     
+    professions = [
+        {"Data engineer"},
+        # {"Data analyst"},
+        # {"Data scientist"},
+        # {"System analyst"},
+        # {"Business analyst"},
+        # {"Project manager"},
+        # {"Product manager"},
+        # {"Backend developer"},
+        # {"Frontend developer"},
+        # {"Fullstack developer"},
+        # {"digital marketing specialist"},
+        # {"Web designer"},
+        # {"UI/UX"},
+        # {"UX/UI"},
+        # {"QA engineer"},
+        {"DevOps"}
+    ]
      
-# обходит капчу и берет самый первый адрес странницы с поиском
-    def bypass_captcha(url_careerist, profs):
-        with webdriver.Chrome(service=ChromeService(ChromeDriverManager().install())) as browser:
-#        with webdriver.Remote(command_executor='http://selenium-router:4444/wd/hub', options=options)as browser:
+    # обходит капчу и берет самый первый адрес странницы с поиском
+    def bypass_captcha(url_careerist, proff):
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+#        with webdriver.Chrome(service=ChromeService(ChromeDriverManager().install())) as browser:
+        with webdriver.Remote(command_executor='http://127.0.0.1:10144/wd/hub', options=options) as browser
             browser.get(url_careerist)
             time.sleep(2)
     
-            # ищем поле ввода и вводим текст
-            inp = browser.find_element(By.XPATH, '//*[@id="profs-text"]')
-            inp.send_keys(profs)
-            time.sleep(2)
+            try:
+                # ищем поле ввода и вводим текст
+                inp = browser.find_element(By.XPATH, '//*[@id="keyword-text"]')
+                inp.send_keys(proff)
+                time.sleep(2)
+            except:
+                pass
     
-            # ищем кнопку "найти" и жмем ёё
-            browser.find_element(By.XPATH, '/html/body/div[1]/div[2]/div[1]/div/div/div/div[3]/div/div/div/div/form/div[1]/div[3]/button').click()
-            time.sleep(1)
-            
+            try:
+                # ищем кнопку "найти" и жмем ёё
+                browser.find_element(By.XPATH,
+                                    '/html/body/div[1]/div[2]/div[1]/div/div/div/div[3]/div/div/div/div/form/div[1]/div[3]/button').click()
+                time.sleep(1)
+            except:
+                pass
+    
             try:
                 # ищем кнопку "закрыть рекламу" и жмем ёё
                 browser.find_element(By.XPATH, '/html/body/div[3]/div/form/div/div[1]/button').click()
                 time.sleep(4)
-            except Exception as e:
-                        self.log.error(f"Произошла ошибка: закрыть рекламу {e}")       
-                        pass
+            except:
+                pass
     
             try:
                 # ищем кнопку "снять фильтр" и жмем ёё
-                browser.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section/div[2]/div[2]/div/div[1]/form/div/div[1]/div[3]/div/ul/li/a/span').click()
+                browser.find_element(By.XPATH,
+                                    '/html/body/div[1]/div[2]/div/section/div[2]/div[2]/div/div[1]/form/div/div[1]/div[3]/div/ul/li/a/span').click()
                 time.sleep(4)
-            except Exception as e:
-                    self.log.error(f"Произошла ошибка: снять фильтр {e}")       
-                    pass
+            except:
+                pass
     
             try:
                 # ищем кнопку "ПОКАЗАТЬ" и жмем ёё
-                browser.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/section/div[2]/div[2]/div/div[1]/form/div/div[1]/div[1]/div[2]/a').click()
+                browser.find_element(By.XPATH,
+                                    '/html/body/div[1]/div[2]/div/section/div[2]/div[2]/div/div[1]/form/div/div[1]/div[1]/div[2]/a').click()
                 time.sleep(4)
-            except Exception as e:
-                    self.log.error(f"Произошла ошибка: ищем кнопку ПОКАЗАТЬ и жмем ёё {e}")       
-                    pass
+            except:
+                pass
     
-            # получаем текущий URL страницы
-            current_url = browser.current_url
+                # получаем текущий URL страницы
+            current_url_careerist = browser.current_url_careerist
     
-            return current_url
-     
-
-    def get_all_links(url):
-        link_url = []
-        current_page = url_careerist + "&page="
-        page_number = 0
-        ua = UserAgent()
-        random_ua = ua.random
-        headers = {'User-Agent': random_ua}
-        while True: 
-            page_url = current_page + str(page_number)
+            return current_url_careerist
         
+    # сохраняет все url_careerist вакансии
+    def get_all_links(result):
+        link_url_careerist = []
+        current_page = result + "&page="
+        page_number = 0
+    
+        while True:
+            page_url_careerist = current_page + str(page_number)
+    
             try:
-                response = requests.get(page_url, headers, verify=False)
-#                response = requests.get(page_url, verify=False)
-
+                response = requests.get(page_url_careerist, headers, verify=False)
                 if response.status_code == 404:
                     break
                 soup = BeautifulSoup(response.content, 'lxml')
                 links = soup.find_all('p', class_='h5 card-text')
                 for link in links:
                     link = link.find('a')
-                    urls = link['href']
-                    link_url.append(urls)
-                    
-    #             links = get_links_from_page(page_url)
-    #             link_url.extend(links)
+                    url_careerists = link['href']
+                    link_url_careerist.append(url_careerists)
+    
+                #             links = get_links_from_page(page_url_careerist)
+                #             link_url_careerist.extend(links)
                 page_number += 1
-            except requests.exceptions.RequestException as e:
-                    self.log.error(f"Произошла ошибка: {e}, get_all_links ")
-                    break
-
-        return link_url
+            except:
+                pass  # requests.exceptions.RequestException:
+        #            break
+    
+        return link_url_careerist
 
 
     
-    def find_vacancies(self):
-        """
-        Метод для нахождения вакансий с 
-        """
-        url = bypass_captcha(url_careerist, profs)
-        all_links = get_all_links(url)
-        self.log.info(all_links)
-        self.log.info(len(all_links))
-        self.cur = self.conn.cursor()
-        self.df = pd.DataFrame(columns=['vacancy_id', 'vacancy_name', 'towns', 'company', 'salary_from', 'source_vac', 'date_created',
-                                        'date_of_download', 'status', 'version_vac', 'actual', 'description'])
-        self.log.info("Создан DataFrame для записи вакансий")
-        self.browser.implicitly_wait(3)
-        
+    def scrape_data(all_links, df):
         with tqdm(total=len(all_links), desc="Scraping Data", unit="link") as pbar:
-                for url in all_links:
-                    scrap = {} # Создайте новый пустой словарь для каждой вакансии
-                    response = requests.get(url, headers=headers,timeout=10, verify=False)
-                    soup = BeautifulSoup(response.content, 'lxml')
-
+           for url_careerist in all_links:
+                scrap = {}  # Создайте новый пустой словарь для каждой вакансии
+                response = requests.get(url_careerist, headers=headers, timeout=10, verify=False)
+                soup = BeautifulSoup(response.content, 'lxml')
+                try:
                     scrap['vacancy_name'] = soup.find('h1').text.strip()
-                    try:
-                        scrap['company'] = soup.find('div', class_='m-b-10').text.strip()
-                    except Exception as e:
-                        self.log.error(f"Произошла ошибка: {e}")
-                        pass
-                    try:
-                        bam = soup.find_all('div', attrs={'class', 'b-b-1'})[1]
-                        scrap['salary_from'] = bam.find('p', attrs={'class' : 'h5'}).text
-                    except Exception as e:
-                        self.log.error(f"Произошла ошибка: {e}")
-                        pass
-                    try:
-                        scrap['towns'] = soup.find('p', class_='col-xs-8 col-sm-9').text.strip()
-                    except Exception as e:
-                        self.log.error(f"Произошла ошибка: {e}")
-                        pass
-                    try:
-                        scrap['date_created'] = soup.find('p', class_='pull-xs-right m-l-1 text-small').text.strip()
-                    except Exception as e:
-                        self.log.error(f"Произошла ошибка: {e}")
-                        pass
-                    scrap['source_vac'] = url
-                    try:
-                        scrap['description'] = soup.find_all('div', attrs={'class', 'b-b-1'})[2].text.strip()
-                    except Exception as e:
-                        self.log.error(f"Произошла ошибка: {e}")
-                        pass
-                    
+                    print(scrap['vacancy_name'])
+                except:
+                    pass
+                try:
+                    scrap['company'] = soup.find('div', class_='m-b-10').text.strip()
+                except:
+                    pass
+                try:
+                    bam = soup.find_all('div', attrs={'class', 'b-b-1'})[1]
+                    scrap['salary_from'] = bam.find('p', attrs={'class': 'h5'}).text
+                except:
+                    pass
+                try:
+                    scrap['towns'] = soup.find('p', class_='col-xs-8 col-sm-9').text.strip()
+                except:
+                    pass
+                try:
+                    scrap['date'] = soup.find('p', class_='pull-xs-right m-l-1 text-small').text.strip()
+                except:
+                    pass
+                scrap['url_careerist'] = url_careerist
+                try:
+                    scrap['description'] = soup.find_all('div', attrs={'class', 'b-b-1'})[2].text.strip()
+                except:
+                    pass
 
-                    df = df.append(scrap, ignore_index=True) 
+                df = df._append(scrap, ignore_index=True)
 
-                    pbar.update(1)
-                    
-                    time.sleep(2)
+                pbar.update(1)
 
-        
-        
-        
-        # Поиск и запись вакансий на поисковой странице
-#        for prof in self.profs:
-#            input_button = self.browser.find_element(By.XPATH,
-#                                                     '/html/body/div/div[1]/div[1]/div/form/div[1]/div[4]/div/div/div/div/input')
-#            input_button.send_keys(prof['fullName'])
-#            click_button = self.browser.find_element(By.XPATH,
-#                                                     '/html/body/div/div[1]/div[1]/div/form/div[1]/div[4]/div/button')
-#            click_button.click()
-#            time.sleep(5)
-#
-#            # Прокрутка вниз до конца страницы
-#            self.scroll_down_page()
-#
-#            try:
-#                vacs_bar = self.browser.find_element(By.XPATH, '/html/body/div/div[1]/div[2]/div/div')
-#                vacs = vacs_bar.find_elements(By.CLASS_NAME, 'result-item')
-#                vacs = [div for div in vacs if 'result-item' in str(div.get_attribute('class'))]
-#                self.log.info(f"Парсим вакансии по запросу: {prof['fullName']}")
-#                self.log.info(f"Количество: " + str(len(vacs)) + "\n")
-#
-#                for vac in vacs:
-#                    vac_info = {}
-#                    vac_info['vacancy_id'] = str(vac.get_attribute('href'))
-#                    vac_info['vacancy_name'] = str(vac.find_element(By.CLASS_NAME, 'title-block').text)
-#                    vac_info['towns'] = str(vac.find_element(By.CLASS_NAME, 'result-item-place').text)
-#                    vac_info['company'] = str(vac.find_element(By.CLASS_NAME, 'result-item-unit').text)
-#                    self.df.loc[len(self.df)] = vac_info
-#
-#            except Exception as e:
-#                self.log.error(f"Произошла ошибка: {e}")
-#                input_button.clear()
+                time.sleep(1)
+
+        # Удаление дубликатов
+        df.drop_duplicates(inplace=True)
+
+        # Сохранение в CSV-файл с дополнением
+        df.to_csv('caryerist_debag.csv', mode='a', index=False, header=False)
 
         self.df = self.df.drop_duplicates()
         self.log.info("Общее количество найденных вакансий после удаления дубликатов: " + str(len(self.df)) + "\n")
@@ -392,32 +377,22 @@ class careeristJobParser(BaseJobParser):
         self.df['status'] = 'existing'
         self.df['version_vac'] = 1
         self.df['actual'] = 1
+        return df
+        
+    def find_vacancies(self, url_careerist, profs, df):
+        for proff in professions:
+            result = bypass_captcha(url_careerist, proff)
+            print(result)
+            print(len(result))
+            all_links = get_all_links(result)
+            print(all_links)
+            print(len(all_links))
+            df = scrape_data(all_links, df)
 
-#    def find_vacancies_description(self):
-#        """
-#        Метод для парсинга описаний вакансий для VKJobParser.
-#        """
-#        self.log.info('Старт парсинга описаний вакансий')
-#        if not self.df.empty:
-#            for descr in self.df.index:
-#                try:
-#                    vacancy_id = self.df.loc[descr, 'vacancy_id']
-#                    self.browser.get(vacancy_id)
-#                    self.browser.delete_all_cookies()
-#                    time.sleep(3)
-#                    desc = self.browser.find_element(By.CLASS_NAME, 'section').text
-#                    desc = desc.replace(';', '')
-#                    self.df.loc[descr, 'description'] = str(desc)
-#
-#                except Exception as e:
-#                    self.log.error(f"Произошла ошибка: {e}, ссылка {self.df.loc[descr, 'vacancy_id']}")
-#                    pass
-#        else:
-#            self.log.info(f"Нет вакансий для парсинга")
 
     def save_df(self):
         """
-        Метод для сохранения данных в базу данных vk
+        Метод для сохранения данных в базу данных careerist
         """
         self.cur = self.conn.cursor()
 
@@ -459,17 +434,17 @@ class careeristJobParser(BaseJobParser):
 
 db_manager = DatabaseManager(conn=conn)
 
-def init_run_vk_parser(**context):
+def init_run_careerist_parser(**context):
     """
-    Основной вид задачи для запуска парсера для вакансий VK
+    Основной вид задачи для запуска парсера для вакансий careerist
     """
     log = context['ti'].log
     log.info('Запуск парсера careerist')
     try:
         parser = careeristJobParser(url_careerist, profs, log, conn)
-        parser.bypass_captcha(url_careerist, profs)
-        parser.get_all_links(url_careerist)
-        parser.find_vacancies()
+#        parser.bypass_captcha(url_careerist, profs)
+#        parser.get_all_links(url_careerist)
+        parser.find_vacancies(url_careerist, profs)
 #        parser.find_vacancies_description()
         parser.save_df()
         parser.stop()
@@ -492,7 +467,7 @@ create_raw_tables = PythonOperator(
 
 parse_careeristjobs = PythonOperator(
     task_id='parse_careeristjobs',
-    python_callable=init_run_vk_parser,
+    python_callable=init_run_careerist_parser,
     provide_context=True,
     dag=initial_dag
 )
